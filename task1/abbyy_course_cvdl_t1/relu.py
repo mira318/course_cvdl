@@ -9,11 +9,11 @@ class ReluLayer(BaseLayer):
     """
     def __init__(self):
         super().__init__()
-        raise NotImplementedError()
 
     def forward(self, input: np.ndarray) -> np.ndarray:
-        raise NotImplementedError()
+        self.mask = 1 * (input > 0) 
+        return self.mask * input
 
     def backward(self, output_grad: np.ndarray) -> np.ndarray:
-        raise NotImplementedError()
+        return output_grad * self.mask
 
