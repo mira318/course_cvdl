@@ -10,7 +10,6 @@ class CrossEntropyLoss(BaseLayer):
     """
     def __init__(self):
         super().__init__()
-        raise NotImplementedError()
 
     def forward(self, pred: np.ndarray, target: np.ndarray) -> np.ndarray:
         """
@@ -26,11 +25,27 @@ class CrossEntropyLoss(BaseLayer):
         P[B, c] = exp(pred[B, c]) / Sum[c](exp(pred[B, c])
         Loss[B] = - Sum[c]log( prob[B, C] * target[B, C]) ) = -log(prob[B, C_correct])
         """
-        raise NotImplementedError()
-
+        
+        loss = np.zeros(pred.shape[0])
+        self.class_index = np.zeros(pred.shape[0]).astype(int)
+        self.soft_max = np.zeros((pred.shape[0], pred.shape[1]))
+        
+        for b in range(pred.shape[0]):
+            self.soft_max[b] = np.exp(pred[b]) / np.sum(np.exp(pred[b]))
+            self.class_index[b] = np.squeeze(np.where(target[b] > 0))
+            loss[b] = -np.log(self.soft_max[b][self.class_index[b]])
+            
+        return loss
+        
     def backward(self) -> np.ndarray:
         """
         Возвращает градиент лосса по pred, т.е. первому аргументу .forward
         Не принимает никакого градиента по определению.
         """
-        raise NotImplementedError()
+        output_grads = np.zeros(self.soft_max.shape)
+        for b in range(output_grads.shape[0]):
+            output_grads[b] = self.soft_max[b]
+            output_grads[b][self.class_index[b]] = self.soft_max[b][self.class_index[b]] - 1
+            
+        return output_grads
+        
