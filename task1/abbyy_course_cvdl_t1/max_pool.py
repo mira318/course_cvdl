@@ -72,11 +72,9 @@ class MaxPoolLayer(BaseLayer):
                         res[b][c][h_m][w_m] = np.max(
                             input[b, c, inp_h:(inp_h + self.kernel_size), inp_w:(inp_w + self.kernel_size)]
                         )
-        print('max_list = ', self.max_list)
         return res
 
     def backward(self, output_grad: np.ndarray)->np.ndarray:
-        print('output_grad = ', output_grad)
         grad = np.zeros(self.input_shape)
         list_index = 0
         for b in range(output_grad.shape[0]):
@@ -85,5 +83,4 @@ class MaxPoolLayer(BaseLayer):
                     for w_out in range(output_grad.shape[3]):
                         grad[self.max_list[list_index]] += output_grad[b][c][h_out][w_out] 
                         list_index += 1
-        print('gard = ', grad)
         return grad
