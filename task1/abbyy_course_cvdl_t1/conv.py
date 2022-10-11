@@ -66,39 +66,27 @@ class ConvLayer(BaseLayer):
         """
         assert kernel.shape[-1] == kernel.shape[-2]
         assert kernel.shape[-1] % 2 == 1
-        self.input = input
         res = np.zeros((input.shape[0], kernel.shape[0], 
                         input.shape[2] - self.parameters[0].shape[-1] + 1, 
                         input.shape[3] - self.parameters[0].shape[-1] + 1))
-        # print('input.shape = ', input.shape)
-        # print('kernel.shape = ', kernel.shape)
+        
         for b in range(input.shape[0]):
             for c_o in range(kernel.shape[0]):
                 for c_i in range(input.shape[1]):
                     for h_place in range(input.shape[2] - self.parameters[0].shape[-1] + 1):
                         for w_place in range(input.shape[3] - self.parameters[0].shape[-1] + 1):
-                            # print('input[', b, ', ', c_i, ', (', 
-                            #       h_place, '):(', h_place + self.parameters[0].shape[-1], '), (', 
-                            #       w_place, '):(', w_place + self.parameters[0].shape[-1], ')])= ', 
-                            #       input[b, c_i,
-                            #       (h_place):(h_place + self.parameters[0].shape[-1]), 
-                            #       (w_place):(w_place + self.parameters[0].shape[-1])])
-                            
-                            # print('kernel[c_o, c_i, :, :] = ', kernel[c_o, c_i, :, :])
-                                
                             res[b, c_o, h_place, w_place] += np.sum(
-                                input[b, c_i,
-                                h_place:(h_place + self.parameters[0].shape[-1]), 
-                                w_place:(w_place + self.parameters[0].shape[-1])
-                                ] * kernel[c_o, c_i, :, :])
+                                input[b, c_i, h_place:(h_place + self.parameters[0].shape[-1]), 
+                                             w_place:(w_place + self.parameters[0].shape[-1])
+                                     ] * kernel[c_o, c_i, :, :])
                 res[b, c_o] += self.parameters[1][c_o]
                                 
         return res
 
     def forward(self, input: np.ndarray) -> np.ndarray:
         padding_size = self.parameters[0].shape[-1] // 2
-        input_padded = self._pad_zeros(self, input, padding_size)
-        return self._cross_correlate(self, input_padded, self.parameters[0])
+        self.input_padded = self._pad_zeros(self, input, padding_size)
+        return self._cross_correlate(self, self.input_padded, self.parameters[0])
 
     def backward(self, output_grad: np.ndarray)->np.ndarray:
         for c_o in range(self.parameters[0].shape[0]):
@@ -106,23 +94,28 @@ class ConvLayer(BaseLayer):
             
         padding_size = self.parameters[0].shape[-1] // 2
         output_grad_padded = self._pad_zeros(self, output_grad, padding_size)
-        print('output_grad.shape = ', output_grad.shape)
         grad = np.zeros((output_grad.shape[0], self.parameters[0].shape[1], output_grad.shape[2], output_grad.shape[3]))
+        W_changed = np.zeros((self.parameters[0].shape[-1], self.parameters[0].shape[-1]))
         
-        w_changed = np.zeros((self.parameters[0].shape[-1], self.parameters[0].shape[-1]))
-        
-        for b in range(self.input.shape[0]):
+        for b in range(self.input_padded.shape[0]):
             for c_o in range(self.parameters[0].shape[0]):
-                for c_i in range(self.input.shape[1]):
-                    for h_place in range(self.input.shape[2] - self.parameters[0].shape[-1] + 1):
-                        for w_place in range(self.input.shape[3] - self.parameters[0].shape[-1] + 1):
-                            for h_kernel in range(self.parameters[0].shape[-1]):
-                                for w_kernel in range(self.parameters[0].shape[-1]):
-                                    self.parameters_grads[0][c_o][c_i][h_kernel][w_kernel] += output_grad_padded[b, c_o, h_place + h_kernel, w_place + w_kernel]
-                                    w_changed[h_kernel, w_kernel] = self.parameters[0][c_o][c_i][self.parameters[0].shape[-1] - 1 - h_kernel][self.parameters[0].shape[-1] - 1 - w_kernel]
-                             
-                             
-                            grad[b, c_i, h_place, w_place] += np.sum(w_changed * output_grad_padded[b, c_o, h_place:(h_place + self.parameters[0].shape[-1]), w_place:(w_place + self.parameters[0].shape[-1])])
+                for c_i in range(self.input_padded.shape[1]):
+                    for h_kernel in range(self.parameters[0].shape[-1]):
+                        for w_kernel in range(self.parameters[0].shape[-1]):
+                        
+                            self.parameters_grads[0][c_o, c_i, h_kernel, w_kernel] += np.sum(
+                                 output_grad[b, c_o, :, :] * self.input_padded[b, c_i, 
+                                 h_kernel:(grad.shape[2] + h_kernel), w_kernel:(grad.shape[3] + w_kernel)])
+                                 
+                            W_changed[h_kernel, w_kernel] = self.parameters[0][ c_o, c_i,
+                                self.parameters[0].shape[-1] - 1 - h_kernel, 
+                                self.parameters[0].shape[-1] - 1 - w_kernel]
+                            
+                    for h_place in range(grad.shape[2]):
+                        for w_place in range(grad.shape[3]):
+                            grad[b, c_i, h_place, w_place] += np.sum(W_changed * output_grad_padded[b, c_o, 
+                                h_place:(h_place + self.parameters[0].shape[-1]), 
+                                w_place:(w_place + self.parameters[0].shape[-1])])
                             
                                     
         return grad
