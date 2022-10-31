@@ -15,8 +15,17 @@ class PointsNonMaxSuppression(nn.Module):
         self.kernel_size = kernel_size
 
     def forward(self, points):
-        raise NotImplementedError()
-        return points
+        batch_size, classes, h, w = points.shape
+        padded_points = nn.functional.pad(points, (1, 1, 1, 1), "constant", 0)
+        cleared_points = torch.zeros_like(points)
+        for b in range(batch_size):
+            for c in range(classes):
+                for i in range(h):
+                    for j in range(w):
+                        if padded_points[b][c][i + 1][j + 1] == torch.max(padded_points[b][c][i:(i + 3), j:(j + 3)]):
+                            cleared_points[b][c][i][j] = padded_points[b][c][i + 1][j + 1]
+                            
+        return cleared_points
 
 
 class ScaleObjects(nn.Module):
