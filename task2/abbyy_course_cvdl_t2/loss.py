@@ -47,30 +47,39 @@ class CenterNetLoss(nn.Module):
 
         # считаем лоссы
         lk = self.loss_fl(pred_probs, target_probs) / (num_real_objects + 1)
+        print('lk = ', lk)
 
         pred_offsets = pred_heatmaps[:, -4:-2]
         target_offsets = target_heatmaps[:, -4:-2]
         loff = self.loss_l1(pred_offsets, target_offsets, is_real_object) / (num_real_objects + 1)
+        print('loff = ', loff)
 
         pred_sizes = pred_heatmaps[:, -2:]
         target_sizes = target_heatmaps[:, -2:]
         lsize = self.loss_l1(pred_sizes, target_sizes, is_real_object) / (num_real_objects + 1)
+        print('lsize = ', lsize)
+        print('returned ', torch.stack([lk, self.l_offset_lambda * loff, lsize * self.l_size_lambda ], axis=-1))
         return torch.stack([lk, self.l_offset_lambda * loff, lsize * self.l_size_lambda ], axis=-1)
 
     def loss_fl(self, predict_cyx, target_cyx, alpha=2, beta=4):
         """
         Focal loss между двумя heatmap. В статье параметры FL alpha=2, beta=4.
         """
+        border = torch.tensor(100000)
         loss = 0
-        alpha = 2
-        beta = 4
         predict_cyx = predict_cyx.flatten()
         target_cyx = target_cyx.flatten()
         for i, predict_prob in enumerate(predict_cyx):
             if target_cyx[i] == 1:
-                loss -= ((1 - predict_prob)**alpha) * torch.log(predict_prob)
+                loss_val = ((1 - predict_prob)**alpha) * torch.log(predict_prob)
             else:
-                loss -= ((1 - predict_prob)**beta) * (predict_prob**alpha) * torch.log(1 - predict_prob)
+                loss_val = ((1 - predict_prob)**beta) * (predict_prob**alpha) * torch.log(1 - predict_prob)
+                
+            if torch.isnan(loss_val):
+                loss = loss - border
+            else:
+                loss = loss - loss_val
+               
         return loss
 
 
@@ -81,4 +90,4 @@ class CenterNetLoss(nn.Module):
         (т.к. их для всех изображений генерируется по N, а детекций может быть меньше),
         и для объектов с is_real_object=False следует считать лосс как 0.
         """
-        return torch.sum(torch.abs(predict - target))
+        return torch.sum(torch.abs(predict - target) * is_real_object)

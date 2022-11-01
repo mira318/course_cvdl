@@ -118,9 +118,9 @@ class ObjectsToPoints(nn.Module):
                 y_idx.append(torch.floor(objects[b][n][0]))
                 x_idx.append(torch.floor(objects[b][n][1]))
                 
-        batch_idx = torch.tensor(batch_idx)
-        y_idx = torch.tensor(y_idx)
-        x_idx = torch.tensor(x_idx)
+        batch_idx = torch.tensor(batch_idx).to(objects.device)
+        y_idx = torch.tensor(y_idx).to(objects.device)
+        x_idx = torch.tensor(x_idx).to(objects.device)
         return batch_idx.long(), y_idx.long(), x_idx.long()
 
     @classmethod
@@ -138,8 +138,8 @@ class ObjectsToPoints(nn.Module):
                 dy.append(objects[b][n][0] - torch.floor(objects[b][n][0]))
                 dx.append(objects[b][n][1] - torch.floor(objects[b][n][1]))
                 
-        dy = torch.tensor(dy)
-        dx = torch.tensor(dx)
+        dy = torch.tensor(dy).to(objects.device)
+        dx = torch.tensor(dx).to(objects.device)
         return dy, dx
 
     @classmethod
@@ -158,8 +158,8 @@ class ObjectsToPoints(nn.Module):
                 h.append(objects[b][n][2])
                 w.append(objects[b][n][3])
         
-        h = torch.tensor(h)
-        w = torch.tensor(w)
+        h = torch.tensor(h).to(objects.device)
+        w = torch.tensor(w).to(objects.device)
         return h.flatten(), w.flatten()
 
     @classmethod
@@ -168,7 +168,6 @@ class ObjectsToPoints(nn.Module):
         Сглаживает one-hot points_heatmap ядром с гауссианой.
         Скорее всего, через свёртку с ядром.
         """
-        print('points_heatmap.shape = ', points_heatmap.shape)
         kernel_h = smooth_kernel.shape[0]
         kernel_w = smooth_kernel.shape[1]
         pad = (kernel_h // 2, kernel_h // 2, kernel_w // 2, kernel_w // 2)
