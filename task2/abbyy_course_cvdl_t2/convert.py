@@ -108,19 +108,11 @@ class ObjectsToPoints(nn.Module):
         Возвращает для всех объектов их локацию (индекс точки в heatmap), в виде трех плоских индексов:
             batch_idx[B * N], y_idx[B * N], x_idx[B * N]
         """
-        batch_idx = []
-        y_idx = []
-        x_idx = []
         batch_size, objects_per_image, d6 = objects.shape
-        for b in range(batch_size):
-            for n in range(objects_per_image):
-                batch_idx.append(b)
-                y_idx.append(torch.floor(objects[b][n][0]))
-                x_idx.append(torch.floor(objects[b][n][1]))
-                
-        batch_idx = torch.tensor(batch_idx).to(objects.device)
-        y_idx = torch.tensor(y_idx).to(objects.device)
-        x_idx = torch.tensor(x_idx).to(objects.device)
+        y_idx = torch.floor(objects[:, :, 0].clone()).to(objects.device).view(batch_size * objects_per_image)
+        x_idx = torch.floor(objects[:, :, 1].clone()).to(objects.device).view(batch_size * objects_per_image)         
+        batch_pre = torch.linspace(0, batch_size - 1, batch_size)
+        batch_idx = batch_pre.repeat_interleave(objects_per_image).view(batch_size * objects_per_image)
         return batch_idx.long(), y_idx.long(), x_idx.long()
 
     @classmethod
@@ -130,17 +122,11 @@ class ObjectsToPoints(nn.Module):
         Возвращает для всех объектов их поправки положения их центров по отношению к локациям
          в виде двух плоских тензоров: dy[B * N], dx[B * N]
         """
-        dy = []
-        dx = []
         batch_size, objects_per_image, d6 = objects.shape
-        for b in range(batch_size):
-            for n in range(objects_per_image):
-                dy.append(objects[b][n][0] - torch.floor(objects[b][n][0]))
-                dx.append(objects[b][n][1] - torch.floor(objects[b][n][1]))
-                
-        dy = torch.tensor(dy).to(objects.device)
-        dx = torch.tensor(dx).to(objects.device)
-        return dy, dx
+        
+        dy = (objects[:, :, 0].clone() - torch.floor(objects[:, :, 0])).to(objects.device)
+        dx = (objects[:, :, 1].clone() - torch.floor(objects[:, :, 1])).to(objects.device)
+        return dy.view(batch_size * objects_per_image), dx.view(batch_size * objects_per_image)
 
     @classmethod
     def compute_objects_sizes(cls, objects: torch.Tensor)-> Tuple[torch.Tensor, torch.Tensor]:
@@ -149,18 +135,11 @@ class ObjectsToPoints(nn.Module):
         Возвращает для всех объектов их размеры в пикселях в виде двух плоских тензоров:
             h[B * N], w[B * N]
         """
-        
-        w = []
-        h = []
         batch_size, objects_per_image, d6 = objects.shape
-        for b in range(batch_size):
-            for n in range(objects_per_image):
-                h.append(objects[b][n][2])
-                w.append(objects[b][n][3])
         
-        h = torch.tensor(h).to(objects.device)
-        w = torch.tensor(w).to(objects.device)
-        return h.flatten(), w.flatten()
+        h = torch.tensor(objects[:, :, 2]).to(objects.device)
+        w = torch.tensor(objects[:, :, 3]).to(objects.device)
+        return h.view(batch_size * objects_per_image), w.view(batch_size * objects_per_image)
 
     @classmethod
     def smooth_points_heatmap(cls, points_heatmap: torch.Tensor, smooth_kernel:torch.Tensor):
@@ -174,13 +153,11 @@ class ObjectsToPoints(nn.Module):
         heatmap_padded = nn.functional.pad(points_heatmap, pad, "constant", 0)
         
         new_heatmap = torch.zeros_like(points_heatmap)
-        for b in range(points_heatmap.shape[0]):
-            for c in range(points_heatmap.shape[1]):
-                for i in range(points_heatmap.shape[2]):
-                    for j in range(points_heatmap.shape[3]):
-                        new_heatmap[b][c][i][j] = torch.sum(
-                            heatmap_padded[b][c][i:(i + kernel_h), j:(j + kernel_w)] * smooth_kernel
-                        )
+        for i in range(points_heatmap.shape[2]):
+            for j in range(points_heatmap.shape[3]):
+                new_heatmap[:, :, i, j] = torch.sum(
+                    heatmap_padded[:, :, i:(i + kernel_h), j:(j + kernel_w)] * smooth_kernel
+                )
         return new_heatmap
 
     @staticmethod
@@ -193,9 +170,7 @@ class ObjectsToPoints(nn.Module):
         k = kernel_size // 2
         sigma = (k + 1) / 3
         x = torch.arange(kernel_size) - k
-        gauss_1d = torch.exp(
-            -x ** 2 / (2 * sigma**2)
-        )
+        gauss_1d = torch.exp(-x ** 2 / (2 * sigma**2))
         gauss_2d = gauss_1d[None, :] * gauss_1d[:, None]
         gauss_2d /= gauss_2d.max()
         return gauss_2d
@@ -225,32 +200,27 @@ class PointsToObjects(nn.Module):
         self.objects_per_image = objects_per_image
 
     def forward(self, points_heatmap):
-        hw = points_heatmap.shape[2]
+        batch = points_heatmap.shape[0]
         classes = points_heatmap.shape[1] - 4
+        hw = points_heatmap.shape[2]
         objects = torch.zeros(points_heatmap.shape[0], self.top_k, 6)
-        for b in range(points_heatmap.shape[0]):
-            topk_scores = []
-            topk_inds = []
-            topk_cls = []
-            scores, inds = torch.topk(points_heatmap[b, 0:(classes)].flatten(), self.top_k)
-            for i, s in enumerate(scores):
-                if s > self.min_conf:
-                    topk_scores.append(s)
-                    index = inds[i]
-                    topk_cls.append(index // (hw * hw))
-                    index %= (hw * hw)
-                    topk_inds.append((index // hw, index % hw))
-                    
-            topk_scores = torch.tensor(topk_scores)
-            topk_inds = torch.tensor(topk_inds)
-            topk_cls = torch.tensor(topk_cls)
-            
-            for i, s in enumerate(topk_scores):
-                objects[b][i][0] = topk_inds[i][0] + points_heatmap[b][classes][topk_inds[i][0]][topk_inds[i][1]]
-                objects[b][i][1] = topk_inds[i][1] + points_heatmap[b][classes + 1][topk_inds[i][0]][topk_inds[i][1]]
-                objects[b][i][2] = points_heatmap[b][classes + 2][topk_inds[i][0]][topk_inds[i][1]]
-                objects[b][i][3] = points_heatmap[b][classes + 3][topk_inds[i][0]][topk_inds[i][1]]
-                objects[b][i][4] = topk_cls[i]
-                objects[b][i][5] = s
+        
+        scores, inds = torch.topk(points_heatmap[:, 0:classes].view(batch, -1), self.top_k)
+        top_classes = (inds / (hw * hw)).int()
+        indexes = inds % (hw * hw)
+        ys = (inds / hw).int()
+        xs = (inds % hw).int()
+        
+        for b in range(batch):
+            for k in range(self.top_k):
+                if scores[b, k] > self.min_conf:
+                    objects[b, k, 0] = ys[b, k] + points_heatmap[b, classes, ys[b, k], xs[b, k]]
+                    objects[b, k, 1] = xs[b, k] + points_heatmap[b, classes + 1, ys[b, k], xs[b, k]]
+                    objects[b, k, 2] = points_heatmap[b, classes + 2, ys[b, k], xs[b, k]]
+                    objects[b, k, 3] = points_heatmap[b, classes + 3, ys[b, k], xs[b, k]]
+                    objects[b, k, 4] = top_classes[b, k]
+                    objects[b, k, 5] = scores[b, k]
+                else:
+                    objects[b, k] = torch.zeros(6)
                 
         return objects

@@ -19,7 +19,6 @@ class CenterNetHead(nn.Module):
     """
     def __init__(self, k_in_channels=64, c_classes: int = 2):
         super().__init__()
-        self.r = 4
         self.c_classes = c_classes
         out_channels = c_classes + 4
         self.conv1 = nn.Conv2d(in_channels = k_in_channels, out_channels = out_channels, kernel_size = 3, 
@@ -38,9 +37,8 @@ class CenterNetHead(nn.Module):
         offset_map = out_t[:, self.c_classes:(self.c_classes + 2), :, :]
         size_map = out_t[:, (self.c_classes + 2):(self.c_classes + 4), :, :]
 
-        class_heatmap = nn.Softmax(dim = 1)(classes_map)
-        offset_map = nn.Sigmoid()(offset_map) * self.r
-        size_map = nn.Sigmoid()(size_map)
-        size_map[:, 0, :, :] *= self.w * self.r
-        size_map[:, 1, :, :] *= self.h * self.r
+        class_heatmap = nn.Sigmoid()(classes_map.clone())
+        offset_map = nn.Sigmoid()(offset_map.clone())
+        size_map = nn.Sigmoid()(size_map.clone())
+        
         return torch.cat([class_heatmap, offset_map, size_map], dim=1)

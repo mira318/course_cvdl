@@ -44,43 +44,37 @@ class CenterNetLoss(nn.Module):
         # создаем маску, какие объекты являются реальными детекциями, а какие "фальшивыми" со значениями 0
         is_real_object = (target_probs.sum(axis=1, keepdims=True)>=1.0).byte()
         num_real_objects = is_real_object.sum(axis=(1, 2, 3))
+        
+        print('pred_probs = ', pred_probs)
+        print('target_probs = ', target_probs)
 
         # считаем лоссы
         lk = self.loss_fl(pred_probs, target_probs) / (num_real_objects + 1)
-        print('lk = ', lk)
-
+        
         pred_offsets = pred_heatmaps[:, -4:-2]
         target_offsets = target_heatmaps[:, -4:-2]
         loff = self.loss_l1(pred_offsets, target_offsets, is_real_object) / (num_real_objects + 1)
-        print('loff = ', loff)
-
+        
         pred_sizes = pred_heatmaps[:, -2:]
         target_sizes = target_heatmaps[:, -2:]
         lsize = self.loss_l1(pred_sizes, target_sizes, is_real_object) / (num_real_objects + 1)
-        print('lsize = ', lsize)
-        print('returned ', torch.stack([lk, self.l_offset_lambda * loff, lsize * self.l_size_lambda ], axis=-1))
         return torch.stack([lk, self.l_offset_lambda * loff, lsize * self.l_size_lambda ], axis=-1)
 
     def loss_fl(self, predict_cyx, target_cyx, alpha=2, beta=4):
         """
         Focal loss между двумя heatmap. В статье параметры FL alpha=2, beta=4.
         """
-        border = torch.tensor(100000)
-        loss = 0
-        predict_cyx = predict_cyx.flatten()
-        target_cyx = target_cyx.flatten()
-        for i, predict_prob in enumerate(predict_cyx):
-            if target_cyx[i] == 1:
-                loss_val = ((1 - predict_prob)**alpha) * torch.log(predict_prob)
-            else:
-                loss_val = ((1 - predict_prob)**beta) * (predict_prob**alpha) * torch.log(1 - predict_prob)
-                
-            if torch.isnan(loss_val):
-                loss = loss - border
-            else:
-                loss = loss - loss_val
-               
-        return loss
+        save_predict = predict_cyx.clip(1e-7, 1 - 1e-7)
+        print('fl_loss returned ', -torch.sum(torch.where(
+            save_predict == 1, 
+            ((1 - save_predict)**alpha) * torch.log(save_predict), 
+            ((1 - save-predict)**beta) * (save_predict**alpha) * torch.log(1 - save_predict))
+        ))
+        return -torch.sum(torch.where(
+            save_predict == 1, 
+            ((1 - save_predict)**alpha) * torch.log(save_predict), 
+            ((1 - save-predict)**beta) * (save_predict**alpha) * torch.log(1 - save_predict))
+        )
 
 
     def loss_l1(self, predict, target, is_real_object):

@@ -28,7 +28,7 @@ def test_nms():
     nms = PointsNonMaxSuppression(kernel_size=kernel_size)
     points_with_nms = nms(points_without_nms)
     objects_with_nms = points_to_objs(points_with_nms)
-
+    
     assert torch.allclose(objects_with_nms[1], torch.zeros_like(objects_with_nms[1])), objects_with_nms[1]
     objects_with_nms = objects_with_nms[0][objects_with_nms[0][:, -1] > 0.]
     assert len(objects_with_nms) == 1, objects_with_nms

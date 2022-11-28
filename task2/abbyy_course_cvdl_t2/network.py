@@ -15,17 +15,9 @@ class PointsNonMaxSuppression(nn.Module):
         self.kernel_size = kernel_size
 
     def forward(self, points):
-        batch_size, classes, h, w = points.shape
-        padded_points = nn.functional.pad(points, (1, 1, 1, 1), "constant", 0)
-        cleared_points = torch.zeros_like(points)
-        for b in range(batch_size):
-            for c in range(classes):
-                for i in range(h):
-                    for j in range(w):
-                        if padded_points[b][c][i + 1][j + 1] == torch.max(padded_points[b][c][i:(i + 3), j:(j + 3)]):
-                            cleared_points[b][c][i][j] = padded_points[b][c][i + 1][j + 1]
-                            
-        return cleared_points
+        cleared_points = nn.MaxPool2d(kernel_size = 3, stride = 1, padding = 1)(points)
+        equality = torch.where(cleared_points == points, 1.0, 0.0)
+        return equality
 
 
 class ScaleObjects(nn.Module):
@@ -42,7 +34,7 @@ class ScaleObjects(nn.Module):
 
     def forward(self, objects):
         b, n, d6 = objects.shape
-        objects[:, :, :4] *= self.scale
+        objects[:, :, :4] = objects[:, :, :4].clone() * self.scale
         return objects
 
 

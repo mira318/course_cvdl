@@ -50,6 +50,7 @@ def train(dataset, *, net=None, criterion=None, batch_size=8, lr=3e-4, epochs=20
             optimizer.zero_grad()
             outputs = net(inputs)
             losses = criterion(outputs, anno).mean(axis=0)
+            print('losses = ', losses)
             loss_value = losses.sum()
             if torch.isnan(loss_value).any():
                 warnings.warn("nan loss! skip update")
@@ -62,6 +63,7 @@ def train(dataset, *, net=None, criterion=None, batch_size=8, lr=3e-4, epochs=20
                 print(f"epoch {epoch}|{i}; total loss:{running_loss / stats_step}")
                 print(f"last losses: {[l.item() for l in losses.flatten()]}")
                 running_loss = 0.0
+            
             loss_value.backward()
             optimizer.step()
     print('Finished Training')
