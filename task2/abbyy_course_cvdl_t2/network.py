@@ -1,4 +1,5 @@
 from torch import nn
+import torch.nn.functional as F
 import torch
 from abbyy_course_cvdl_t2.head import CenterNetHead
 from abbyy_course_cvdl_t2.backbone import ResnetBackbone
@@ -15,9 +16,11 @@ class PointsNonMaxSuppression(nn.Module):
         self.kernel_size = kernel_size
 
     def forward(self, points):
-        cleared_points = nn.MaxPool2d(kernel_size = 3, stride = 1, padding = 1)(points)
-        equality = torch.where(cleared_points == points, 1.0, 0.0)
-        return equality
+        classes = points.shape[1] - 4
+        cleared_points = torch.max(points[:, 0:classes], dim = 1)[0]
+        maxes = nn.MaxPool2d(kernel_size = 3, stride = 1, padding = 1)(cleared_points)
+        equality = ((maxes == cleared_points).repeat_interleave(classes + 4, 0)).reshape(points.shape)
+        return points * equality
 
 
 class ScaleObjects(nn.Module):
@@ -34,7 +37,7 @@ class ScaleObjects(nn.Module):
 
     def forward(self, objects):
         b, n, d6 = objects.shape
-        objects[:, :, :4] = objects[:, :, :4].clone() * self.scale
+        objects[:, :, :4] *= self.scale
         return objects
 
 

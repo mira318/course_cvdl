@@ -109,6 +109,7 @@ class ObjectsToPoints(nn.Module):
             batch_idx[B * N], y_idx[B * N], x_idx[B * N]
         """
         batch_size, objects_per_image, d6 = objects.shape
+        
         y_idx = torch.floor(objects[:, :, 0].clone()).to(objects.device).view(batch_size * objects_per_image)
         x_idx = torch.floor(objects[:, :, 1].clone()).to(objects.device).view(batch_size * objects_per_image)         
         batch_pre = torch.linspace(0, batch_size - 1, batch_size)
@@ -124,8 +125,8 @@ class ObjectsToPoints(nn.Module):
         """
         batch_size, objects_per_image, d6 = objects.shape
         
-        dy = (objects[:, :, 0].clone() - torch.floor(objects[:, :, 0])).to(objects.device)
-        dx = (objects[:, :, 1].clone() - torch.floor(objects[:, :, 1])).to(objects.device)
+        dy = (objects[:, :, 0] - torch.floor(objects[:, :, 0])).to(objects.device)
+        dx = (objects[:, :, 1] - torch.floor(objects[:, :, 1])).to(objects.device)
         return dy.view(batch_size * objects_per_image), dx.view(batch_size * objects_per_image)
 
     @classmethod
@@ -149,16 +150,11 @@ class ObjectsToPoints(nn.Module):
         """
         kernel_h = smooth_kernel.shape[0]
         kernel_w = smooth_kernel.shape[1]
-        pad = (kernel_h // 2, kernel_h // 2, kernel_w // 2, kernel_w // 2)
-        heatmap_padded = nn.functional.pad(points_heatmap, pad, "constant", 0)
-        
-        new_heatmap = torch.zeros_like(points_heatmap)
-        for i in range(points_heatmap.shape[2]):
-            for j in range(points_heatmap.shape[3]):
-                new_heatmap[:, :, i, j] = torch.sum(
-                    heatmap_padded[:, :, i:(i + kernel_h), j:(j + kernel_w)] * smooth_kernel
-                )
-        return new_heatmap
+        classes = points_heatmap.shape[1]
+        return nn.functional.conv2d(input = points_heatmap, 
+                weight = torch.unsqueeze(torch.unsqueeze(smooth_kernel, dim = 0), dim = 0).repeat_interleave(classes, 0), 
+                bias = None, 
+                padding = (kernel_h // 2, kernel_w // 2), groups = classes)
 
     @staticmethod
     def _gaussian_2d(kernel_size: int) -> torch.Tensor:
@@ -203,13 +199,13 @@ class PointsToObjects(nn.Module):
         batch = points_heatmap.shape[0]
         classes = points_heatmap.shape[1] - 4
         hw = points_heatmap.shape[2]
-        objects = torch.zeros(points_heatmap.shape[0], self.top_k, 6)
-        
-        scores, inds = torch.topk(points_heatmap[:, 0:classes].view(batch, -1), self.top_k)
+        objects = torch.zeros(batch, self.top_k, 6)
+
+        scores, inds = torch.topk(points_heatmap[:, 0:classes].reshape(batch, -1), self.top_k)
         top_classes = (inds / (hw * hw)).int()
         indexes = inds % (hw * hw)
-        ys = (inds / hw).int()
-        xs = (inds % hw).int()
+        ys = (indexes / hw).int()
+        xs = (indexes % hw).int()
         
         for b in range(batch):
             for k in range(self.top_k):
@@ -221,6 +217,6 @@ class PointsToObjects(nn.Module):
                     objects[b, k, 4] = top_classes[b, k]
                     objects[b, k, 5] = scores[b, k]
                 else:
-                    objects[b, k] = torch.zeros(6)
+                    objects[b, k] = torch.zeros(6).to(points_heatmap.device)
                 
         return objects

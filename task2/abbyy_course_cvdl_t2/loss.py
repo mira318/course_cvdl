@@ -44,9 +44,6 @@ class CenterNetLoss(nn.Module):
         # создаем маску, какие объекты являются реальными детекциями, а какие "фальшивыми" со значениями 0
         is_real_object = (target_probs.sum(axis=1, keepdims=True)>=1.0).byte()
         num_real_objects = is_real_object.sum(axis=(1, 2, 3))
-        
-        print('pred_probs = ', pred_probs)
-        print('target_probs = ', target_probs)
 
         # считаем лоссы
         lk = self.loss_fl(pred_probs, target_probs) / (num_real_objects + 1)
@@ -64,13 +61,7 @@ class CenterNetLoss(nn.Module):
         """
         Focal loss между двумя heatmap. В статье параметры FL alpha=2, beta=4.
         """
-        save_predict = predict_cyx.clip(1e-7, 1 - 1e-7)
-        print('save_predict = ', save_predict)
-        print('fl_loss returned ', -torch.sum(torch.where(
-            save_predict == 1, 
-            ((1 - save_predict)**alpha) * torch.log(save_predict), 
-            ((1 - save_predict)**beta) * (save_predict**alpha) * torch.log(1 - save_predict))
-        ))
+        save_predict = torch.clamp(predict_cyx, 1e-5, 1 - 1e-5)
         return -torch.sum(torch.where(
             save_predict == 1, 
             ((1 - save_predict)**alpha) * torch.log(save_predict), 
@@ -85,4 +76,4 @@ class CenterNetLoss(nn.Module):
         (т.к. их для всех изображений генерируется по N, а детекций может быть меньше),
         и для объектов с is_real_object=False следует считать лосс как 0.
         """
-        return torch.sum(torch.abs(predict - target) * is_real_object)
+        return torch.sum(torch.abs(predict - target) * is_real_object, dim = (1, 2, 3))

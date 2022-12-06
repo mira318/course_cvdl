@@ -70,9 +70,7 @@ class HeadlessResnet18Encoder(nn.Module):
         # https://arxiv.org/pdf/1512.03385.pdf, Table1
         super().__init__()
         self.net = nn.Sequential(
-            nn.Conv2d(in_channels = 3, out_channels = 64, kernel_size = 7, padding = 3, stride = 2),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
+            nn.Conv2d(in_channels = 3, out_channels = 64, kernel_size = 7, stride = 2),
             nn.MaxPool2d(kernel_size = 3, stride = 2, padding = 1),
             
             self.SimpleBlock(in_channels = 64, out_channels = 64, kernel_size = 3, padding = 1, stride = 1),

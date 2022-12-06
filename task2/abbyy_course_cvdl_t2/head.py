@@ -20,25 +20,36 @@ class CenterNetHead(nn.Module):
     def __init__(self, k_in_channels=64, c_classes: int = 2):
         super().__init__()
         self.c_classes = c_classes
-        out_channels = c_classes + 4
-        self.conv1 = nn.Conv2d(in_channels = k_in_channels, out_channels = out_channels, kernel_size = 3, 
-                               stride = 1, padding = 1)
-        self.relu = nn.ReLU()
-        self.conv2 = nn.Conv2d(in_channels = out_channels, out_channels = out_channels, kernel_size = 1,
-                               stride = 1, padding = 0)
+        
+        self.class_head = nn.Sequential(
+            nn.Conv2d(in_channels = k_in_channels, out_channels = k_in_channels,
+                kernel_size = 3, stride = 1, padding = 1),
+            nn.ReLU(),
+            nn.Conv2d(in_channels = k_in_channels, out_channels = self.c_classes,
+                kernel_size = 1, stride = 1, padding = 0),
+            nn.Sigmoid()
+        )
 
+        self.offset_head = nn.Sequential(
+            nn.Conv2d(in_channels = k_in_channels, out_channels = k_in_channels,
+                kernel_size = 3, stride = 1, padding = 1),
+            nn.ReLU(),
+            nn.Conv2d(in_channels = k_in_channels, out_channels = 2,
+                kernel_size = 1, stride = 1, padding = 0),
+            nn.Sigmoid()
+        )
+
+        self.size_head =  nn.Sequential(
+            nn.Conv2d(in_channels = k_in_channels, out_channels = k_in_channels,
+                kernel_size = 3, stride = 1, padding = 1),
+            nn.ReLU(),
+            nn.Conv2d(in_channels = k_in_channels, out_channels = 2,
+                kernel_size = 1, stride = 1, padding = 0)
+        )
 
     def forward(self, input_t: torch.Tensor):
-        self.w = input_t.shape[2]
-        self.h = input_t.shape[3]
-        
-        out_t = self.conv2(self.relu(self.conv1(input_t)))
-        classes_map = out_t[:, 0:self.c_classes, :, :]
-        offset_map = out_t[:, self.c_classes:(self.c_classes + 2), :, :]
-        size_map = out_t[:, (self.c_classes + 2):(self.c_classes + 4), :, :]
-
-        class_heatmap = nn.Sigmoid()(classes_map.clone())
-        offset_map = nn.Sigmoid()(offset_map.clone())
-        size_map = nn.Sigmoid()(size_map.clone())
+        class_heatmap = self.class_head(input_t)
+        offset_map = self.offset_head(input_t)
+        size_map = self.size_head(input_t)
         
         return torch.cat([class_heatmap, offset_map, size_map], dim=1)
