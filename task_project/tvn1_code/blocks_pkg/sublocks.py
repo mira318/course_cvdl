@@ -139,4 +139,50 @@ class MultiAvg(nn.Module):
             
         return torch.cat(out, dim = 0), new_vid_lens
 
- 
+class MultiSE(nn.Module):
+    def __init__(self, in_planes, out_planes, stride = 1, downsample = None, reduction = 16):
+        super().__init__()
+        self.downsample = downsample
+        
+        self.conv1 = nn.Conv2d(in_channels = in_planes, out_channels = out_planes, kernel_size = 3, 
+                               stride = stride, padding = 1, bias = False)
+        self.bn1 = nn.BatchNorm2d(out_planes)
+        self.relu1 = nn.ReLU()
+        
+        self.conv2 = nn.Conv2d(in_channels = out_planes, out_channels = out_planes, kernel_size = 1,
+                               stride = stride, padding = 1, bias = False)
+        self.bn2 = nn.BatchNorm2d(out_planes)
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        
+        self.linear1 = nn.Linear(out_planes, out_planes // reduction, bias = False)
+        self.relu2 = nn.ReLU()
+        
+        self.linear2 = nn.Linear(out_planes // reduction, out_planes, bias = False)
+        self.sigmoid = nn.Sigmoid()
+        
+    def forward(self, x):
+        projection = x
+        out = self.relu1(self.bn1(self.conv1(x)))
+        out = self.bn2(self.conv2(out))
+        
+        batch, channel, h, w = out.shape
+        out = self.avg_pool(out)
+        out = out.reshape(batch, channel)
+        out = self.linear2(self.relu2(self.linear1(out)))
+        out = self.sigmoid(out).reshape(batch, channel, 1, 1)
+        out = x * out.expand_as(x)
+        
+        if self.downsample is not None:
+            projection = self.downsample(x)
+        
+        out = out + projection
+        out = self.relu1(out)
+        
+        return out
+    
+class MultiNL(nn. Module):
+    def __init__(self, in_channels):
+        super().__init__()
+        
+    def forward(self, x):
+        

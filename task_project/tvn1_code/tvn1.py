@@ -5,7 +5,10 @@ from blocks_pkg.blocks import *
 class TVN1(nn.Module):
     def __init__(self):
         super().__init__()
-        self.body = nn.Sequential(TinyBlock1())
+        self.body = nn.Sequential(
+            TinyBlock1(),
+            TinyBlock2()
+        )
         
     def forward(self, input):
         x, vid_lens = input
