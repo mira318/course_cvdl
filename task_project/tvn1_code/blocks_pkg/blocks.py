@@ -70,40 +70,9 @@ class TinyBlock2(nn.Module):
 class TinyBlock3(nn.Module):
     def __init__(self, in_channels = 128):
         super().__init__()
-        self.spatial_conv = nn.Conv2d(in_channels = in_channels, out_channels = in_channels, 
-                                      kernel_size = 3, stride = 1, padding = 1)
-        self.conv2_1 = nn.Conv1d(in_channels = in_channels, out_channels = in_channels, 
-                                 kernel_size = 3, stride = 1, padding = 1, dilation = 1, groups = 1)
-        
-        self.nl = MultiNL(in_channels)
+        self.sublock1 = Tiny_3_sublock(in_channels = 128)
+        self.sublock2 = Tiny_3_sublock(in_channels = 128)
+        self.sublock3 = Tiny_3_sublock(in_channels = 128)
         
     def forward(self, input):
-        x, vid_lens = input
-        projection = x    
-        x = self.spatial_conv(x)
-        
-        _, channels, h, w = x.shape
-        new_vid_lens = []
-        out = []
-        
-        for i in range(len(vid_lens)):
-            idx = sum(vid_lens[:i])
-            curr_len = vid_lens[i]
-            part_x = x[idx:(idx + curr_len)]
-                
-            part_x = part_x.reshape(curr_len, channels, h * w)
-            y = torch.transpose(part_x, 2, 0)
-            y = self.conv2_1(y)
-            y = torch.transpose(y, 2, 0)
-            y = y.reshape(y.shape[0], y.shape[1], h, w)
-                
-            new_vid_lens.append(y.shape[0])
-            out.append(y)
-                
-        x = torch.cat(out, dim = 0)
-        vid_lens = new_vid_lens
-        
-        x = self.nl(x)
-        x = x + projection
-        return x, vid_lens
-        
+        return self.sublock3(self.sublock2(self.sublock1(input)))

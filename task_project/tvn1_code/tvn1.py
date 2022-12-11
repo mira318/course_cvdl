@@ -7,7 +7,8 @@ class TVN1(nn.Module):
         super().__init__()
         self.body = nn.Sequential(
             TinyBlock1(),
-            TinyBlock2()
+            TinyBlock2(),
+            TinyBlock3()
         )
         
     def forward(self, input):

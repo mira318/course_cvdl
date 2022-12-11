@@ -183,6 +183,103 @@ class MultiSE(nn.Module):
 class MultiNL(nn. Module):
     def __init__(self, in_channels):
         super().__init__()
+        self.subsample = True
+        self.need_bn = True
+        self.in_channels = in_channels
+        self.inter_channels = max(1, self.in_channels // 2) 
         
-    def forward(self, x):
+        self.conv1 = nn.Conv2d(in_channels = self.in_channels, out_channels = self.inter_channels,
+                               kernel_size = 1, stride = 1, padding = 0)
+        self.max_pool = nn.MaxPool2d((2, 2))
         
+        self.conv2 = nn.Conv2d(in_channels = self.inter_channels, out_channels = self.in_channels, 
+                               kernel_size = 1, stride = 1, padding = 0)
+        self.bn1 = nn.BatchNorm2d(self.in_channels)
+        
+        nn.init.constant_(self.conv2.weight, 0)
+        nn.init.constant_(self.conv2.bias, 0)
+        
+        self.conv3_t = nn.Conv2d(in_channels = self.in_channels, out_channels = self.inter_channels, 
+                                 kernel_size = 1, stride = 1, padding = 0)
+        
+        self.conv4_p = nn.Conv2d(in_channels = self.in_channels, out_channels = self.inter_channels, 
+                                 kernel_size = 1, stride = 1, padding = 0)
+        
+        self.conv5_pr = nn.Conv2d(in_channels = 2 * self.inter_channels, out_channels = 1, 
+                                  kernel_size = 1, stride = 1, padding = 0, bias = False)
+        self.relu = nn.ReLU()
+        
+        
+    def forward(self, x, return_map = False):
+        batches = x.shape[0]
+        xg = self.max_pool(self.conv1(x))
+        xg = xg.reshape(batches, self.inter_channels, -1)
+        xg = xg.permute(0, 2, 1)
+        
+        xt = self.conv3_t(x)
+        xt = xt.reshape(batches, self.inter_channels, -1, 1)
+        
+        xp = self.max_pool(self.conv4_p(x))
+        xp = xp.reshape(batches, self.inter_channels, 1, -1)
+        
+        h, w = xt.shape[2], xp.shape[3]
+        xt = xt.repeat(1, 1, 1, w)
+        xp = xp.repeat(1, 1, h, 1)
+        
+        features = torch.cat([xt, xp], dim = 1)
+        features = self.relu(self.conv5_pr(features))
+        f_batches, _, h, w = features.shape
+        features = features.reshape(f_batches, h, w)
+        
+        c_new = features.shape[-1]
+        y = torch.matmul(features / c_new, xg)
+        y = y.permute(0, 2, 1)
+        y = y.reshape(batches, self.inter_channels, *x.shape[2:]).contiguous()
+        
+        y = self.bn1(self.conv2(y))
+        
+        if not return_map:
+            return y + x
+        else:
+            return y + x, features / c_new
+        
+        
+class Tiny_3_sublock(nn.Module):
+    def __init__(self, in_channels):
+        super().__init__()
+        self.spatial_conv = nn.Conv2d(in_channels = in_channels, out_channels = in_channels, 
+                                      kernel_size = 3, stride = 1, padding = 1)
+        self.conv2_1 = nn.Conv1d(in_channels = in_channels, out_channels = in_channels, 
+                                 kernel_size = 3, stride = 1, padding = 1, dilation = 1, groups = 1)
+        
+        self.nl = MultiNL(in_channels)
+        
+    def forward(self, input):
+        x, vid_lens = input
+        projection = x    
+        x = self.spatial_conv(x)
+        
+        _, channels, h, w = x.shape
+        new_vid_lens = []
+        out = []
+        
+        for i in range(len(vid_lens)):
+            idx = sum(vid_lens[:i])
+            curr_len = vid_lens[i]
+            part_x = x[idx:(idx + curr_len)]
+                
+            part_x = part_x.reshape(curr_len, channels, h * w)
+            y = torch.transpose(part_x, 2, 0)
+            y = self.conv2_1(y)
+            y = torch.transpose(y, 2, 0)
+            y = y.reshape(y.shape[0], y.shape[1], h, w)
+                
+            new_vid_lens.append(y.shape[0])
+            out.append(y)
+                
+        x = torch.cat(out, dim = 0)
+        vid_lens = new_vid_lens
+        
+        x = self.nl(x)
+        x = x + projection
+        return x, vid_lens
