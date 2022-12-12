@@ -33,7 +33,6 @@ class TVN1(nn.Module):
             out.append(y)
                 
         x = torch.cat(out, dim = 0)
-        print('before head x.shape = ', x.shape)
         x = self.head_linear1(x)
         x = self.head_lrelu(x)
         x = self.head_linear2(x)
