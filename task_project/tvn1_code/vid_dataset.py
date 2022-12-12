@@ -4,17 +4,15 @@ from torch.utils import data
 from torchvision import transforms
 
 class VideoDataset(data.Dataset):
-    def __init__(self, root, index_file, transforms, is_val = False, 
-                 clip_size = 128, nclips = 1, step_size = 1):
+    def __init__(self, root, index_file, vid_transforms, clip_size = 32, nclips = 1, step_size = 1):
         self.root = root
         self.clip_size = clip_size
         self.nclips = nclips
         self.step_size = step_size
-        self.is_val = is_val
         
         self.files_list = []
         self.classes_list = []
-        self.transforms = transforms
+        self.vid_transforms = vid_transforms
         
         with open(index_file, 'r') as f:
             line = f.readline()
@@ -36,14 +34,14 @@ class VideoDataset(data.Dataset):
 
         while success:
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            image = self.transforms(image)
+            image = self.vid_transforms(image)
             images.append(image)
             success, image = catcher.read()
             
         duritation = len(images)
         need_at_least = self.clip_size * self.nclips * self.step_size
         
-        if need_at_least < duritation and not self.is_val:
+        if need_at_least < duritation:
             len_diff = duritation - need_at_least
             offset = int(len_diff * torch.rand(1))
             images = images[offset:(need_at_least + offset)]
@@ -52,9 +50,11 @@ class VideoDataset(data.Dataset):
         if duritation < need_at_least:
             images.extend([images[-1]] * (need_at_least - len(images)))
             
-        img_data = torch.stack(images).permute(1, 0, 2, 3)
         
-        return (img_data, item_class)
+        duritation = len(images)    
+        img_data = torch.stack(images)
+        
+        return (img_data, duritation, item_class)
         
     def __len__(self):
         return len(self.files_list)
