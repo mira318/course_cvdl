@@ -50,7 +50,7 @@ def train(dataset, *, net=None, criterion=None, batch_size=8, lr=3e-4, epochs=20
             optimizer.zero_grad()
             outputs = net(inputs)
             losses = criterion(outputs, anno).mean(axis=0)
-            print('losses = ', losses)
+            # print('losses = ', losses)
             loss_value = losses.sum()
             if torch.isnan(loss_value).any():
                 warnings.warn("nan loss! skip update")

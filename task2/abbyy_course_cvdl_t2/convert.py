@@ -152,7 +152,9 @@ class ObjectsToPoints(nn.Module):
         kernel_w = smooth_kernel.shape[1]
         classes = points_heatmap.shape[1]
         return nn.functional.conv2d(input = points_heatmap, 
-                weight = torch.unsqueeze(torch.unsqueeze(smooth_kernel, dim = 0), dim = 0).repeat_interleave(classes, 0), 
+                weight = torch.unsqueeze(
+                    torch.unsqueeze(smooth_kernel, dim = 0), dim = 0
+                ).repeat_interleave(classes, 0), 
                 bias = None, 
                 padding = (kernel_h // 2, kernel_w // 2), groups = classes)
 

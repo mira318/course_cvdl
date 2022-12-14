@@ -61,11 +61,11 @@ class CenterNetLoss(nn.Module):
         """
         Focal loss между двумя heatmap. В статье параметры FL alpha=2, beta=4.
         """
-        save_predict = torch.clamp(predict_cyx, 1e-5, 1 - 1e-5)
+        save_predict = torch.clamp(predict_cyx, 1e-5, 1.0 - 1e-5)
         return -torch.sum(torch.where(
-            save_predict == 1, 
+            target_cyx == 1, 
             ((1 - save_predict)**alpha) * torch.log(save_predict), 
-            ((1 - save_predict)**beta) * (save_predict**alpha) * torch.log(1 - save_predict))
+            ((1 - target_cyx)**beta) * (save_predict**alpha) * torch.log(1 - save_predict))
         )
 
 

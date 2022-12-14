@@ -23,7 +23,7 @@ class CenterNetHead(nn.Module):
         
         self.class_head = nn.Sequential(
             nn.Conv2d(in_channels = k_in_channels, out_channels = k_in_channels,
-                kernel_size = 3, stride = 1, padding = 1),
+                kernel_size = 3, padding = 1),
             nn.ReLU(),
             nn.Conv2d(in_channels = k_in_channels, out_channels = self.c_classes,
                 kernel_size = 1, stride = 1, padding = 0),
@@ -32,7 +32,7 @@ class CenterNetHead(nn.Module):
 
         self.offset_head = nn.Sequential(
             nn.Conv2d(in_channels = k_in_channels, out_channels = k_in_channels,
-                kernel_size = 3, stride = 1, padding = 1),
+                kernel_size = 3, padding = 1),
             nn.ReLU(),
             nn.Conv2d(in_channels = k_in_channels, out_channels = 2,
                 kernel_size = 1, stride = 1, padding = 0),
@@ -41,7 +41,7 @@ class CenterNetHead(nn.Module):
 
         self.size_head =  nn.Sequential(
             nn.Conv2d(in_channels = k_in_channels, out_channels = k_in_channels,
-                kernel_size = 3, stride = 1, padding = 1),
+                kernel_size = 3, padding = 1),
             nn.ReLU(),
             nn.Conv2d(in_channels = k_in_channels, out_channels = 2,
                 kernel_size = 1, stride = 1, padding = 0)
